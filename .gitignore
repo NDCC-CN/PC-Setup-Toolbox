@@ -1,0 +1,18 @@
+# 安装包（体积太大，是可重新下载的第三方软件，不入库）
+/packages/
+
+# 打包产物
+/build/
+/dist/
+
+# 分发测试目录
+/_分发测试/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyo
+
+# 系统文件
+Thumbs.db
+.DS_Store
