@@ -2328,7 +2328,7 @@ def uninstall_node():
                 msgs.append("目录 " + os.path.basename(d))
             except OSError:
                 pass
-    if _remove_from_path("nodejs"):
+    if _remove_from_path(r"C:\Program Files\nodejs"):
         msgs.append("PATH 中的 nodejs 条目")
     if msgs:
         result += "\n（已清理卸载残留：{}）".format("、".join(msgs))
@@ -2384,44 +2384,53 @@ def uninstall_vscode():
     return "√ 已静默卸载 {}。".format(display)
 
 
-def _remove_from_path(fragment):
-    """从当前用户 PATH 中移除含 fragment 的条目（卸载 gcc 时清理 PATH）"""
+def _remove_from_path(exact_path):
+    """从当前用户 PATH 中精确移除某一条目（忽略大小写和首尾斜杠，不误删含同类关键词的其他路径）"""
     ps = (
         '$p = [Environment]::GetEnvironmentVariable("Path","User"); '
-        '$parts = $p -split ";" | Where-Object { $_ -and ($_ -notmatch [regex]::Escape("{frag}")) }; '
+        '$t = ("{exact}").Trim().TrimEnd("\\","/").ToLower(); '
+        '$parts = $p -split ";" | Where-Object { $_ -and ($_.Trim().TrimEnd("\\","/").ToLower() -ne $t) }; '
         '[Environment]::SetEnvironmentVariable("Path", ($parts -join ";"), "User"); '
         'Write-Output "OK"'
-    ).replace("{frag}", fragment)
+    ).replace("{exact}", exact_path)
     out, code = run_powershell(ps)
     return code == 0
 
 
 def uninstall_gcc():
-    """C/C++ 是我们自己解压的，卸载 = 删除 mingw 目录 + 清理 PATH"""
+    """C/C++ 是我们自己解压的，卸载 = 删除 mingw 目录 + 精确清理 PATH（只删本工具加的 bin，不误删别的 mingw）"""
     import shutil
     target = os.path.join(devtools_dir(), "mingw")
     if not os.path.exists(target):
         return "× 未检测到 C/C++ 编译器（{} 不存在），可能未安装或已卸载。".format(target)
+    # 安装时可能加进 PATH 的是 mingw64\bin 或 bin，删目录前先算出这两个候选
+    bins = [os.path.join(target, sub) for sub in ("mingw64\\bin", "bin")
+            if os.path.isdir(os.path.join(target, sub))]
     try:
         shutil.rmtree(target)
     except OSError as e:
         return "× 删除 {} 失败：{}".format(target, e)
-    _remove_from_path("mingw")
-    return "√ 已删除 C/C++ 编译器目录 {}（PATH 中的 mingw 条目已清理，重开终端后生效）。".format(target)
+    for b in bins:
+        _remove_from_path(b)
+    return "√ 已删除 C/C++ 编译器目录 {}（PATH 中的对应条目已清理，重开终端后生效）。".format(target)
 
 
 def uninstall_java():
-    """Java 是我们自己解压的，卸载 = 删除 jdk 目录 + 清理 PATH"""
+    """Java 是我们自己解压的，卸载 = 删除 jdk 目录 + 精确清理 PATH（只删本工具加的 bin）"""
     import shutil
     target = os.path.join(devtools_dir(), "jdk")
     if not os.path.exists(target):
         return "× 未检测到 Java（{} 不存在），可能未安装或已卸载。".format(target)
+    # JDK 解压后是 jdk8u262-b10/ 这类子目录，PATH 加的是 <jdk>\<子目录>\bin，删目录前先算出
+    bins = [cand for cand in glob.glob(os.path.join(target, "*", "bin"))
+            if os.path.isdir(cand) and os.path.exists(os.path.join(cand, "java.exe"))]
     try:
         shutil.rmtree(target)
     except OSError as e:
         return "× 删除 {} 失败：{}".format(target, e)
-    _remove_from_path("DevTools\\jdk")
-    return "√ 已删除 Java 目录 {}（PATH 中的 jdk 条目已清理，重开终端后生效）。".format(target)
+    for b in bins:
+        _remove_from_path(b)
+    return "√ 已删除 Java 目录 {}（PATH 中的对应条目已清理，重开终端后生效）。".format(target)
 
 
 ENV_INFO = {
